@@ -749,9 +749,12 @@
                 <button class="btn btn-warning" onclick="clearFilters()">🔄 Ресетирај филтри</button>
                 <button class="btn btn-info" onclick="generateMonthlyReport()">📊 Месечен извештај</button>
                 <button class="btn btn-success" onclick="exportToCSV()">📥 Експорт CSV</button>
+                <button class="btn btn-success" onclick="exportToJSON()">📥 Експорт JSON</button>
+                <button class="btn btn-warning" onclick="document.getElementById('jsonFileInput').click()">📤 Импорт JSON</button>
                 <button class="btn btn-primary" onclick="printReport()">🖨️ Принтај</button>
                 <button class="btn btn-success" onclick="syncToCloud()">☁️ Синхронизирај</button>
             </div>
+            <input type="file" id="jsonFileInput" accept=".json" style="display: none;" onchange="importFromJSON(event)">
         </div>
 
         <div id="companySummary" class="company-summary">
@@ -1707,6 +1710,78 @@
             });
 
             downloadCSV(csv, 'fakturi_hotel_de_koka.csv');
+        }
+
+        function exportToJSON() {
+            const dataStr = JSON.stringify(invoices, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'hotel_de_koka_fakturu_' + new Date().toISOString().split('T')[0] + '.json';
+            link.click();
+            URL.revokeObjectURL(url);
+            showSyncStatus('success', '✓ JSON фајлот е симнат!');
+        }
+
+        function importFromJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    if (!Array.isArray(importedData)) {
+                        alert('Невалиден JSON формат! Фајлот мора да содржи низа на фактури.');
+                        return;
+                    }
+
+                    const validInvoices = importedData.filter(inv => 
+                        inv.companyName && inv.invoiceNumber && inv.amount
+                    );
+
+                    if (validInvoices.length === 0) {
+                        alert('Не се пронајдени валидни фактури во фајлот!');
+                        return;
+                    }
+
+                    const action = confirm(
+                        `Пронајдени се ${validInvoices.length} фактури.\n\n` +
+                        `Кликнете OK за да ги ДОДАДЕТЕ кон постоечките фактури.\n` +
+                        `Кликнете Cancel за да ги ЗАМЕНИТЕ сите постоечки фактури.`
+                    );
+
+                    if (action) {
+                        invoices = [...invoices, ...validInvoices];
+                        showSyncStatus('success', `✓ Додадени се ${validInvoices.length} нови фактури!`);
+                    } else {
+                        if (confirm('Дали сте СИГУРНИ дека сакате да ги избришете СИТЕ постоечки фактури и да ги замените со импортираните?')) {
+                            invoices = validInvoices;
+                            showSyncStatus('success', `✓ Фактурите се заменети! Вчитани ${validInvoices.length} фактури.`);
+                        } else {
+                            showSyncStatus('error', '✗ Импортот е откажан.');
+                            return;
+                        }
+                    }
+
+                    invoices.forEach(inv => {
+                        if (!inv.payments) {
+                            inv.payments = [];
+                        }
+                    });
+
+                    saveInvoices();
+                    applyFilters();
+                    
+                } catch (error) {
+                    console.error('Import error:', error);
+                    alert('Грешка при читање на JSON фајлот! Проверете дали фајлот е валиден.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
         }
 
         function exportReportToCSV() {
