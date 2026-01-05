@@ -41,37 +41,6 @@
             font-size: 1.1em;
         }
 
-        .config-section {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-        }
-
-        .config-section h3 {
-            color: #856404;
-            margin-bottom: 15px;
-        }
-
-        .config-section input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        .config-section button {
-            width: 100%;
-        }
-
-        .config-section p {
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
         .sync-status {
             text-align: center;
             padding: 10px;
@@ -622,7 +591,7 @@
                 box-shadow: none;
             }
             
-            .btn, .filter-section, .form-section, .config-section, .sync-status {
+            .btn, .filter-section, .form-section, .sync-status {
                 display: none !important;
             }
             
@@ -672,13 +641,6 @@
     <div class="container">
         <h1>🏨 Хотел Де КОКА</h1>
         <p class="subtitle">Систем за следење на влезни фактури</p>
-
-        <div class="config-section" id="configSection">
-            <h3>⚙️ Поврзување со Google Sheets</h3>
-            <p>Внесете го вашиот Google Apps Script Web App URL што го копиравте претходно:</p>
-            <input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec">
-            <button class="btn btn-success" onclick="saveApiUrl()">💾 Зачувај и поврзи</button>
-        </div>
 
         <div id="syncStatus" class="sync-status hidden"></div>
 
@@ -972,30 +934,12 @@
         let filteredInvoices = [];
         let currentReportData = null;
         let editingPaymentIndex = null;
-        let API_URL = localStorage.getItem('hotelApiUrl') || '';
+        let API_URL = 'https://script.google.com/macros/s/AKfycbwHRZOu-tI-ko8E1mIUHYx5MIhDYixXc26tiKlC7aR0swm_wPLQlB0thjRTn6ZwZrAa/exec';
 
         function checkApiConfiguration() {
-            if (!API_URL) {
-                document.getElementById('configSection').style.display = 'block';
-                return false;
-            } else {
-                document.getElementById('configSection').style.display = 'none';
-                loadFromCloud();
-                return true;
-            }
-        }
-
-        function saveApiUrl() {
-            const url = document.getElementById('apiUrl').value.trim();
-            if (!url) {
-                alert('Ве молам внесете валиден URL!');
-                return;
-            }
-            API_URL = url;
-            localStorage.setItem('hotelApiUrl', url);
             document.getElementById('configSection').style.display = 'none';
-            showSyncStatus('success', '✓ Успешно поврзано! Се вчитуваат податоци...');
             loadFromCloud();
+            return true;
         }
 
         function showSyncStatus(type, message) {
