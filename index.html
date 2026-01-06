@@ -40,7 +40,6 @@
             margin-bottom: 30px;
             font-size: 1.1em;
         }
-
         .sync-status {
             text-align: center;
             padding: 10px;
@@ -70,6 +69,7 @@
         .sync-status.hidden {
             display: none;
         }
+
 
         .form-section {
             background: #f8f9fa;
@@ -126,6 +126,19 @@
         textarea:focus {
             outline: none;
             border-color: #667eea;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
         }
 
         .btn {
@@ -534,6 +547,7 @@
             font-weight: 600;
         }
 
+        /* Кумулативна калкулација */
         .company-summary {
             display: none;
             background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
@@ -591,7 +605,7 @@
                 box-shadow: none;
             }
             
-            .btn, .filter-section, .form-section, .sync-status {
+            .btn, .filter-section, .form-section {
                 display: none !important;
             }
             
@@ -749,14 +763,12 @@
                 <button class="btn btn-warning" onclick="clearFilters()">🔄 Ресетирај филтри</button>
                 <button class="btn btn-info" onclick="generateMonthlyReport()">📊 Месечен извештај</button>
                 <button class="btn btn-success" onclick="exportToCSV()">📥 Експорт CSV</button>
-                <button class="btn btn-success" onclick="exportToJSON()">📥 Експорт JSON</button>
-                <button class="btn btn-warning" onclick="document.getElementById('jsonFileInput').click()">📤 Импорт JSON</button>
                 <button class="btn btn-primary" onclick="printReport()">🖨️ Принтај</button>
-                <button class="btn btn-success" onclick="syncToCloud()">☁️ Синхронизирај</button>
+                <button class="btn btn-success" onclick="manualSync()">☁️ Синхронизирај</button>
             </div>
-            <input type="file" id="jsonFileInput" accept=".json" style="display: none;" onchange="importFromJSON(event)">
         </div>
 
+        <!-- Кумулативна калкулација по фирма -->
         <div id="companySummary" class="company-summary">
             <h3>
                 <span>🏢</span>
@@ -806,6 +818,7 @@
         </div>
     </div>
 
+    <!-- Modal за едитување -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -852,6 +865,7 @@
         </div>
     </div>
 
+    <!-- Modal за плаќања -->
     <div id="paymentModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -917,6 +931,7 @@
         </div>
     </div>
 
+    <!-- Modal за детален извештај -->
     <div id="reportModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -937,12 +952,31 @@
         let filteredInvoices = [];
         let currentReportData = null;
         let editingPaymentIndex = null;
-        let API_URL = 'https://script.google.com/macros/s/AKfycbwHRZOu-tI-ko8E1mIUHYx5MIhDYixXc26tiKlC7aR0swm_wPLQlB0thjRTn6ZwZrAa/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwHRZOu-tI-ko8E1mIUHYx5MIhDYixXc26tiKlC7aR0swm_wPLQlB0thjRTn6ZwZrAa/exec';
 
-        function checkApiConfiguration() {
-            document.getElementById('configSection').style.display = 'none';
-            loadFromCloud();
-            return true;
+        // Load from cloud on startup - NEVER sync empty data on load!
+        loadFromCloud();
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('mk-MK', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(amount);
+        }
+
+        function saveInvoices() {
+            // Always save to localStorage as backup
+            localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
+            // Sync to cloud after saving
+            syncToCloud();
         }
 
         function showSyncStatus(type, message) {
@@ -959,11 +993,6 @@
         }
 
         async function loadFromCloud() {
-            if (!API_URL) {
-                checkApiConfiguration();
-                return;
-            }
-
             try {
                 showSyncStatus('loading', '⏳ Се вчитуваат податоци од Google Sheets...');
                 
@@ -972,19 +1001,29 @@
                 
                 if (data.status === 'success') {
                     invoices = data.invoices || [];
+                    
+                    // Initialize payments array
                     invoices.forEach(inv => {
                         if (!inv.payments) {
                             inv.payments = [];
                         }
                     });
+                    
+                    // Save to localStorage as backup
+                    localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
+                    
+                    // Update UI
                     applyFilters();
-                    showSyncStatus('success', '✓ Податоците се успешно вчитани од Google Sheets!');
+                    
+                    showSyncStatus('success', '✓ Податоците се вчитани од Google Sheets!');
                 } else {
                     throw new Error(data.message || 'Unknown error');
                 }
             } catch (error) {
                 console.error('Load error:', error);
-                showSyncStatus('error', '✗ Грешка при вчитување. Проверете дали URL-то е точно.');
+                showSyncStatus('error', '✗ Не може да се поврзе со Google Sheets. Користам локални податоци.');
+                
+                // Fallback to localStorage
                 const localData = localStorage.getItem('hotelInvoices');
                 if (localData) {
                     invoices = JSON.parse(localData);
@@ -999,14 +1038,32 @@
         }
 
         async function syncToCloud() {
-            if (!API_URL) {
-                alert('Прво поврзете се со Google Sheets!');
-                checkApiConfiguration();
-                return;
-            }
-
             try {
-                showSyncStatus('loading', '⏳ Се синхронизираат податоци со Google Sheets...');
+                // Don't show loading for auto-sync (only for manual)
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'save',
+                        invoices: invoices
+                    })
+                });
+                
+                // Sync is successful (no-cors mode doesn't give us response)
+                console.log('Synced to Google Sheets');
+                
+            } catch (error) {
+                console.error('Sync error:', error);
+                // Continue working - data is in localStorage
+            }
+        }
+
+        async function manualSync() {
+            try {
+                showSyncStatus('loading', '⏳ Се синхронизира со Google Sheets...');
                 
                 const response = await fetch(API_URL, {
                     method: 'POST',
@@ -1020,40 +1077,17 @@
                     })
                 });
                 
-                showSyncStatus('success', '✓ Податоците се успешно зачувани во Google Sheets!');
-                localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
+                showSyncStatus('success', '✓ Успешно синхронизирано со Google Sheets!');
                 
+                // Reload to confirm
                 setTimeout(() => {
                     loadFromCloud();
                 }, 1000);
                 
             } catch (error) {
-                console.error('Sync error:', error);
-                showSyncStatus('success', '✓ Податоците се зачувани локално и ќе се синхронизираат.');
-                localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
+                console.error('Manual sync error:', error);
+                showSyncStatus('error', '✗ Грешка при синхронизација. Податоците се зачувани локално.');
             }
-        }
-
-        function saveInvoices() {
-            localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
-            if (API_URL) {
-                syncToCloud();
-            }
-        }
-
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}.${month}.${year}`;
-        }
-
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('mk-MK', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(amount);
         }
 
         function calculatePaidAmount(invoice) {
@@ -1090,6 +1124,7 @@
                 return;
             }
 
+            // Find all invoices for this company (not just filtered ones)
             const companyInvoices = invoices.filter(inv => 
                 inv.companyName && inv.companyName.toLowerCase().includes(companyFilter.toLowerCase())
             );
@@ -1111,6 +1146,7 @@
                 remainingAmount += (invTotal - invPaid);
             });
 
+            // Get company name from first matching invoice
             const companyName = companyInvoices[0].companyName;
 
             document.getElementById('companySummaryName').textContent = companyName;
@@ -1236,7 +1272,9 @@
                 return true;
             });
 
+            // Update company summary if company filter is active
             updateCompanySummary(companyFilter);
+
             renderInvoices();
         }
 
@@ -1698,7 +1736,7 @@
         }
 
         function exportToCSV() {
-            let csv = '\ufeffФирма,Број на фактура,Жиро сметка,Вкупна сума,Платено,Остаток,Датум фактура,Валута,Статус,Забелешка\n';
+            let csv = 'Фирма,Број на фактура,Жиро сметка,Вкупна сума,Платено,Остаток,Датум фактура,Валута,Статус,Забелешка\n';
             
             filteredInvoices.forEach(inv => {
                 const paidAmount = calculatePaidAmount(inv);
@@ -1712,82 +1750,10 @@
             downloadCSV(csv, 'fakturi_hotel_de_koka.csv');
         }
 
-        function exportToJSON() {
-            const dataStr = JSON.stringify(invoices, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'hotel_de_koka_fakturu_' + new Date().toISOString().split('T')[0] + '.json';
-            link.click();
-            URL.revokeObjectURL(url);
-            showSyncStatus('success', '✓ JSON фајлот е симнат!');
-        }
-
-        function importFromJSON(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    
-                    if (!Array.isArray(importedData)) {
-                        alert('Невалиден JSON формат! Фајлот мора да содржи низа на фактури.');
-                        return;
-                    }
-
-                    const validInvoices = importedData.filter(inv => 
-                        inv.companyName && inv.invoiceNumber && inv.amount
-                    );
-
-                    if (validInvoices.length === 0) {
-                        alert('Не се пронајдени валидни фактури во фајлот!');
-                        return;
-                    }
-
-                    const action = confirm(
-                        `Пронајдени се ${validInvoices.length} фактури.\n\n` +
-                        `Кликнете OK за да ги ДОДАДЕТЕ кон постоечките фактури.\n` +
-                        `Кликнете Cancel за да ги ЗАМЕНИТЕ сите постоечки фактури.`
-                    );
-
-                    if (action) {
-                        invoices = [...invoices, ...validInvoices];
-                        showSyncStatus('success', `✓ Додадени се ${validInvoices.length} нови фактури!`);
-                    } else {
-                        if (confirm('Дали сте СИГУРНИ дека сакате да ги избришете СИТЕ постоечки фактури и да ги замените со импортираните?')) {
-                            invoices = validInvoices;
-                            showSyncStatus('success', `✓ Фактурите се заменети! Вчитани ${validInvoices.length} фактури.`);
-                        } else {
-                            showSyncStatus('error', '✗ Импортот е откажан.');
-                            return;
-                        }
-                    }
-
-                    invoices.forEach(inv => {
-                        if (!inv.payments) {
-                            inv.payments = [];
-                        }
-                    });
-
-                    saveInvoices();
-                    applyFilters();
-                    
-                } catch (error) {
-                    console.error('Import error:', error);
-                    alert('Грешка при читање на JSON фајлот! Проверете дали фајлот е валиден.');
-                }
-            };
-            reader.readAsText(file);
-            event.target.value = '';
-        }
-
         function exportReportToCSV() {
             if (!currentReportData) return;
             
-            let csv = '\ufeffФирма,Број на фактура,Жиро сметка,Вкупна сума,Платено,Остаток,Датум фактура,Валута,Статус,Забелешка\n';
+            let csv = 'Фирма,Број на фактура,Жиро сметка,Вкупна сума,Платено,Остаток,Датум фактура,Валута,Статус,Забелешка\n';
             
             currentReportData.forEach(inv => {
                 const paidAmount = calculatePaidAmount(inv);
@@ -1802,7 +1768,7 @@
         }
 
         function downloadCSV(csv, filename) {
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
@@ -1926,11 +1892,9 @@
             }
         }
 
-        window.onload = function() {
-            document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('dueDate').value = new Date().toISOString().split('T')[0];
-            checkApiConfiguration();
-        };
+        // Initialize dates
+        document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('dueDate').value = new Date().toISOString().split('T')[0];
     </script>
 </body>
 </html>
