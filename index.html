@@ -1170,9 +1170,9 @@
                 inv[searchField] && inv[searchField].toLowerCase().includes(searchTerm.toLowerCase())
             );
 
+            // Don't show dropdown if no matching invoices - just hide it
             if (matchingInvoices.length === 0) {
-                historyDiv.innerHTML = '<div class="no-history">Нема историја за овој запис</div>';
-                historyDiv.classList.add('show');
+                historyDiv.classList.remove('show');
                 return;
             }
 
