@@ -205,9 +205,9 @@
         }
 
         .btn-table {
-            font-size: 11px;
-            padding: 5px 10px;
-            border-radius: 5px;
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
             white-space: nowrap;
         }
 
@@ -650,7 +650,79 @@
                 grid-template-columns: 1fr;
             }
         }
-    </style>
+    
+        /* Accordion стилови за години */
+        .year-accordion {
+            margin-bottom: 15px;
+        }
+
+        .year-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .year-header:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .year-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .year-title {
+            font-size: 1.3em;
+            font-weight: 700;
+        }
+
+        .year-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9em;
+            opacity: 0.95;
+        }
+
+        .year-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .year-toggle {
+            font-size: 1.5em;
+            transition: transform 0.3s;
+        }
+
+        .year-accordion.collapsed .year-toggle {
+            transform: rotate(-90deg);
+        }
+
+        .year-content {
+            margin-top: 10px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .year-accordion.collapsed .year-content {
+            display: none;
+        }
+
+        .year-content table {
+            margin-top: 0;
+        }
+
+</style>
 </head>
 <body>
     <div class="container">
@@ -1332,21 +1404,89 @@
         }
 
         function renderInvoices() {
-            const tbody = document.getElementById('invoiceTableBody');
-            tbody.innerHTML = '';
+            const tableSection = document.querySelector('.table-section');
 
             if (filteredInvoices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 30px; color: #999;">Нема фактури за прикажување</td></tr>';
-            } else {
-                filteredInvoices.forEach((invoice, displayIndex) => {
+                tableSection.innerHTML = `
+                    <h2 style="margin-bottom: 15px;">📋 Листа на фактури</h2>
+                    <div style="text-align: center; padding: 50px; color: #999; background: #f8f9fa; border-radius: 10px;">
+                        <p style="font-size: 1.2em;">Нема фактури за прикажување</p>
+                    </div>
+                `;
+                updateSummary();
+                return;
+            }
+
+            // Групирај фактури по година
+            const invoicesByYear = {};
+            const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+                if (!a.entryDate) return 1;
+                if (!b.entryDate) return -1;
+                return new Date(b.entryDate) - new Date(a.entryDate);
+            });
+
+            sortedInvoices.forEach(invoice => {
+                if (invoice.entryDate) {
+                    const year = new Date(invoice.entryDate).getFullYear();
+                    if (!invoicesByYear[year]) {
+                        invoicesByYear[year] = [];
+                    }
+                    invoicesByYear[year].push(invoice);
+                }
+            });
+
+            // Сортирај години (најнова прва)
+            const years = Object.keys(invoicesByYear).sort((a, b) => b - a);
+
+            let html = '<h2 style="margin-bottom: 15px;">📋 Листа на фактури</h2>';
+
+            years.forEach(year => {
+                const yearInvoices = invoicesByYear[year];
+                const yearTotal = yearInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0);
+                const yearPaid = yearInvoices.reduce((sum, inv) => sum + calculatePaidAmount(inv), 0);
+
+                html += `
+                    <div class="year-accordion" id="year-${year}">
+                        <div class="year-header" onclick="toggleYear(${year})">
+                            <div class="year-header-left">
+                                <span class="year-title">📅 ${year} година</span>
+                                <div class="year-stats">
+                                    <span class="year-stat">📊 ${yearInvoices.length} фактури</span>
+                                    <span class="year-stat">💰 ${formatCurrency(yearTotal)}</span>
+                                    <span class="year-stat" style="color: #d4edda;">✓ ${formatCurrency(yearPaid)}</span>
+                                </div>
+                            </div>
+                            <span class="year-toggle">▼</span>
+                        </div>
+                        <div class="year-content">
+                            <table id="invoiceTable">
+                                <thead>
+                                    <tr>
+                                        <th>Бр.</th>
+                                        <th>Фирма</th>
+                                        <th>Број фактура</th>
+                                        <th>Жиро сметка</th>
+                                        <th>Вкупна сума</th>
+                                        <th>Платено</th>
+                                        <th>Остаток</th>
+                                        <th>Датум</th>
+                                        <th>Валута</th>
+                                        <th>Статус</th>
+                                        <th class="no-print">Акции</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                yearInvoices.forEach((invoice, displayIndex) => {
                     const actualIndex = invoices.indexOf(invoice);
                     const paidAmount = calculatePaidAmount(invoice);
                     const remainingAmount = calculateRemainingAmount(invoice);
                     const status = getPaymentStatus(invoice);
-                    
+
                     let statusText = '';
                     let statusClass = '';
-                    
+
                     if (status === 'paid') {
                         statusText = '✓ Платена';
                         statusClass = 'status-paid';
@@ -1358,28 +1498,45 @@
                         statusClass = 'status-unpaid';
                     }
 
-                    const row = tbody.insertRow();
-                    row.innerHTML = `
-                        <td>${displayIndex + 1}</td>
-                        <td>${invoice.companyName || ''}</td>
-                        <td><strong>${invoice.invoiceNumber || ''}</strong></td>
-                        <td>${invoice.bankAccount || ''}</td>
-                        <td><strong>${formatCurrency(invoice.amount || 0)}</strong></td>
-                        <td style="color: #27ae60;">${formatCurrency(paidAmount)}</td>
-                        <td style="color: #e74c3c;"><strong>${formatCurrency(remainingAmount)}</strong></td>
-                        <td>${invoice.entryDate ? formatDate(invoice.entryDate) : ''}</td>
-                        <td>${invoice.dueDate ? formatDate(invoice.dueDate) : ''}</td>
-                        <td class="${statusClass}">${statusText}</td>
-                        <td class="actions no-print">
-                            <button class="btn btn-info btn-table" onclick="openPaymentModal(${actualIndex})">💰</button>
-                            <button class="btn btn-warning btn-table" onclick="openEditModal(${actualIndex})">✏️</button>
-                            <button class="btn btn-danger btn-table" onclick="deleteInvoice(${actualIndex})">🗑️</button>
-                        </td>
+                    html += `
+                        <tr>
+                            <td>${displayIndex + 1}</td>
+                            <td>${invoice.companyName || ''}</td>
+                            <td><strong>${invoice.invoiceNumber || ''}</strong></td>
+                            <td>${invoice.bankAccount || ''}</td>
+                            <td><strong>${formatCurrency(invoice.amount || 0)}</strong></td>
+                            <td style="color: #27ae60;">${formatCurrency(paidAmount)}</td>
+                            <td style="color: #e74c3c;"><strong>${formatCurrency(remainingAmount)}</strong></td>
+                            <td>${invoice.entryDate ? formatDate(invoice.entryDate) : ''}</td>
+                            <td>${invoice.dueDate ? formatDate(invoice.dueDate) : ''}</td>
+                            <td class="${statusClass}">${statusText}</td>
+                            <td class="actions no-print">
+                                <button class="btn btn-info btn-table" onclick="openPaymentModal(${actualIndex})">💰 Плати</button>
+                                <button class="btn btn-warning btn-table" onclick="openEditModal(${actualIndex})">✏️ Измени</button>
+                                <button class="btn btn-danger btn-table" onclick="deleteInvoice(${actualIndex})">🗑️ Избриши</button>
+                            </td>
+                        </tr>
                     `;
                 });
-            }
 
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+
+            tableSection.innerHTML = html;
             updateSummary();
+        }
+
+        // Функција за toggle на години
+        function toggleYear(year) {
+            const accordion = document.getElementById('year-' + year);
+            if (accordion) {
+                accordion.classList.toggle('collapsed');
+            }
         }
 
         function openPaymentModal(index) {
