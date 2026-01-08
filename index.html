@@ -729,52 +729,92 @@
         <h1>🏨 Хотел Де КОКА</h1>
         <p class="subtitle">Систем за следење на влезни фактури</p>
 
-                <div class="form-section">
-            <h2 style="margin-bottom: 20px;">➕ Додади нова фактура</h2>
-            <form id="invoiceForm">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="companyName">Име на фирма *</label>
-                        <input type="text" id="companyName" placeholder="Име на фирма" required>
-                        <div id="companyHistory" class="history-dropdown"></div>
-                    </div>
-                    <div class="form-group">
-                        <label for="invoiceNumber">Број на фактура *</label>
-                        <input type="text" id="invoiceNumber" placeholder="Број на фактура" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="bankAccount">Жиро сметка *</label>
-                        <input type="text" id="bankAccount" placeholder="210-0000000000000-00" required>
-                        <div id="accountHistory" class="history-dropdown"></div>
-                    </div>
-                    <div class="form-group">
-                        <label for="amount">Сума (ден) *</label>
-                        <input type="number" id="amount" placeholder="0.00" step="0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="entryDate">Датум на фактура *</label>
-                        <input type="date" id="entryDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="dueDate">Валута на фактура *</label>
-                        <input type="date" id="dueDate" required>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="notes">Забелешка</label>
-                        <textarea id="notes" placeholder="Дополнителни забелешки (опционално)"></textarea>
-                    </div>
-                    <div class="form-group full-width" style="margin-top: 15px;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="checkbox" id="isPaidCash" style="width: 20px; height: 20px; cursor: pointer;">
-                            <span style="font-weight: 600; color: #27ae60;">✓ Фактурата е веќе платена (готовинска)</span>
-                        </label>
-                    </div>
-                </div>
-                <div style="margin-top: 20px;">
-                    <button type="submit" class="btn btn-primary">💾 Зачувај фактура</button>
-                </div>
-            </form>
+                <div style="margin-bottom: 20px;">
+  <button type="button" class="btn btn-primary" onclick="openAddInvoiceModal()">➕ Додади нова фактура</button>
+</div>
+
+<!-- Add Invoice Modal -->
+<div id="addInvoiceModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="margin:0;">➕ Додади нова фактура</h2>
+      <span class="close" onclick="closeAddInvoiceModal()">&times;</span>
+    </div>
+
+    <!-- ВАЖНО: ID/полиња остануваат исти за да не се менува логиката -->
+    <form id="invoiceForm">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="companyName">Име на фирма *</label>
+          <input type="text" id="companyName" placeholder="Име на фирма" required>
+          <div id="companyHistory" class="history-dropdown"></div>
         </div>
+
+        <div class="form-group">
+          <label for="invoiceNumber">Број на фактура *</label>
+          <input type="text" id="invoiceNumber" placeholder="Број на фактура" required>
+        </div>
+
+        <div class="form-group">
+          <label for="bankAccount">Жиро сметка *</label>
+          <input type="text" id="bankAccount" placeholder="210-0000000000000-00" required>
+          <div id="accountHistory" class="history-dropdown"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="amount">Сума (ден) *</label>
+          <input type="number" id="amount" placeholder="0.00" step="0.01" required>
+        </div>
+
+        <div class="form-group">
+          <label for="entryDate">Датум на фактура *</label>
+          <input type="date" id="entryDate" required>
+        </div>
+
+        <div class="form-group">
+          <label for="dueDate">Валута на фактура (рок) *</label>
+          <input type="date" id="dueDate" required>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="notes">Забелешка</label>
+          <textarea id="notes" placeholder="Дополнителни забелешки (опционално)"></textarea>
+        </div>
+
+        <div class="form-group full-width" style="margin-top: 10px;">
+          <label style="font-weight:600;">Статус на плаќање *</label>
+          <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="initialStatus" value="unpaid" checked>
+              Неплатено
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="initialStatus" value="paid">
+              Платено
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="initialStatus" value="partial">
+              Делумно платено
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="partialPaidGroup" style="display:none;">
+          <label for="partialPaidAmount">Делумно платено (ден) *</label>
+          <input type="number" id="partialPaidAmount" placeholder="0.00" step="0.01" min="0">
+        </div>
+
+        <!-- Задржано (скриено) за компатибилност со постоечката логика -->
+        <input type="checkbox" id="isPaidCash" style="display:none;">
+      </div>
+
+      <div style="margin-top: 20px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+        <button type="button" class="btn btn-danger" onclick="closeAddInvoiceModal()">Откажи</button>
+        <button type="submit" class="btn btn-primary">💾 Зачувај фактура</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 
 <div id="syncStatus" class="sync-status hidden"></div>
@@ -2286,22 +2326,40 @@
                 payments: []
             };
 
-            // Check if it's a cash payment (paid immediately)
-            const isPaidCash = document.getElementById('isPaidCash').checked;
-            if (isPaidCash) {
-                // Add automatic payment with full amount
+            // Ново: иницијален статус (unpaid/paid/partial) при додавање
+            const initialStatus = document.querySelector('input[name="initialStatus"]:checked')?.value || 'unpaid';
+
+            // Backwards-compatibility (ако некаде се користи isPaidCash)
+            document.getElementById('isPaidCash').checked = (initialStatus === 'paid');
+
+            if (initialStatus === 'paid') {
+                // Платено: цела сума како payment
                 invoice.payments.push({
                     amount: invoice.amount,
                     date: invoice.entryDate,
-                    note: 'Готовинско плаќање'
+                    note: 'Платено (иницијално)'
+                });
+            } else if (initialStatus === 'partial') {
+                const partialVal = parseFloat(document.getElementById('partialPaidAmount').value || 0);
+                if (!(partialVal > 0)) { alert('Внеси делумно платена сума!'); return; }
+                if (partialVal >= invoice.amount) { alert('Делумната сума мора да е помала од вкупната сума!'); return; }
+
+                invoice.payments.push({
+                    amount: partialVal,
+                    date: invoice.entryDate,
+                    note: 'Делумно платено (иницијално)'
                 });
             }
 
             invoices.push(invoice);
             saveInvoices();
             applyFilters();
+            closeAddInvoiceModal();
 
             this.reset();
+            const partialInput = document.getElementById('partialPaidAmount');
+            if (partialInput) partialInput.value = '';
+            updateInitialPaymentUI();
             document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('dueDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('isPaidCash').checked = false;
@@ -2352,6 +2410,166 @@
         // Initialize dates
         document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
         document.getElementById('dueDate').value = new Date().toISOString().split('T')[0];
-    </script>
+
+// --- Add Invoice Modal (UI only; не ја менува логиката на синхронизација/пресметки) ---
+function openAddInvoiceModal() {
+    const modal = document.getElementById('addInvoiceModal');
+    modal.style.display = 'block';
+
+    // Default dates when opening (ако се празни)
+    const today = new Date().toISOString().split('T')[0];
+    const entry = document.getElementById('entryDate');
+    const due = document.getElementById('dueDate');
+    if (entry && !entry.value) entry.value = today;
+    if (due && !due.value) due.value = today;
+
+    updateInitialPaymentUI();
+
+    setTimeout(() => {
+        const el = document.getElementById('companyName');
+        if (el) el.focus();
+    }, 50);
+}
+
+function closeAddInvoiceModal() {
+    document.getElementById('addInvoiceModal').style.display = 'none';
+}
+
+function updateInitialPaymentUI() {
+    const statusEl = document.querySelector('input[name="initialStatus"]:checked');
+    const status = statusEl ? statusEl.value : 'unpaid';
+    const group = document.getElementById('partialPaidGroup');
+    if (group) group.style.display = (status === 'partial') ? 'block' : 'none';
+}
+
+// Радио listener-и
+document.querySelectorAll('input[name="initialStatus"]').forEach(r => {
+    r.addEventListener('change', updateInitialPaymentUI);
+});
+updateInitialPaymentUI();
+
+// Click outside modal to close (не го препокрива постоечкиот window.onclick)
+window.addEventListener('click', function(event) {
+    const addModal = document.getElementById('addInvoiceModal');
+    if (event.target === addModal) closeAddInvoiceModal();
+});
+
+// ESC за затворање на модал
+document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Escape') return;
+    const addModal = document.getElementById('addInvoiceModal');
+    if (addModal && addModal.style.display === 'block') closeAddInvoiceModal();
+});
+
+
+
+// ===== Enhancements (Modal UX) - safe patch over V3 =====
+(function () {
+    // Keep state only for Add Invoice modal
+    let __hk_formState = null;
+
+    function __hk_captureState(form) {
+        const state = {};
+        if (!form) return state;
+        form.querySelectorAll('input, textarea, select').forEach(el => {
+            const key = el.id || el.name;
+            if (!key) return;
+            if (el.type === 'checkbox' || el.type === 'radio') state[key] = el.checked;
+            else state[key] = el.value;
+        });
+        return state;
+    }
+
+    function __hk_hasChanged(form) {
+        if (!form || !__hk_formState) return false;
+        let changed = false;
+        form.querySelectorAll('input, textarea, select').forEach(el => {
+            const key = el.id || el.name;
+            if (!key || __hk_formState[key] === undefined) return;
+            const current = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
+            if (__hk_formState[key] !== current) changed = true;
+        });
+        return changed;
+    }
+
+    function __hk_trapFocus(modal) {
+        if (!modal) return;
+        if (modal.dataset && modal.dataset.hkTrap === '1') return; // only once
+        if (modal.dataset) modal.dataset.hkTrap = '1';
+
+        modal.addEventListener('keydown', (e) => {
+            if (e.key !== 'Tab') return;
+            const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (!focusable || focusable.length < 2) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+    }
+
+    function __hk_setupMobileButton() {
+        const btn = document.querySelector('button[onclick="openAddInvoiceModal()"]');
+        if (!btn) return;
+        if (window.innerWidth <= 768) {
+            btn.style.position = 'fixed';
+            btn.style.bottom = '20px';
+            btn.style.left = '20px';
+            btn.style.zIndex = '999';
+            btn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.35)';
+        } else {
+            btn.style.position = 'static';
+            btn.style.bottom = '';
+            btn.style.left = '';
+            btn.style.zIndex = '';
+            btn.style.boxShadow = '';
+        }
+    }
+
+    // Wrap existing open/close functions from V3 (do NOT replace logic, just add UX)
+    if (typeof window.openAddInvoiceModal === 'function') {
+        const __hk_origOpen = window.openAddInvoiceModal;
+        window.openAddInvoiceModal = function () {
+            __hk_origOpen();
+
+            const modal = document.getElementById('addInvoiceModal');
+            const form = document.getElementById('invoiceForm');
+
+            // Save state for unsaved-changes warning
+            __hk_formState = __hk_captureState(form);
+
+            // Focus trap
+            __hk_trapFocus(modal);
+        };
+    }
+
+    if (typeof window.closeAddInvoiceModal === 'function') {
+        const __hk_origClose = window.closeAddInvoiceModal;
+        window.closeAddInvoiceModal = function () {
+            const form = document.getElementById('invoiceForm');
+            if (__hk_hasChanged(form)) {
+                const ok = confirm('Имате неофаќани промени. Сигурни ли сте дека сакате да затворите?');
+                if (!ok) return;
+            }
+            __hk_origClose();
+        };
+    }
+
+    // Ensure the add button stays usable on mobile
+    window.addEventListener('DOMContentLoaded', __hk_setupMobileButton);
+    window.addEventListener('resize', __hk_setupMobileButton);
+})();
+
+</script>
 </body>
 </html>
