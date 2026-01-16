@@ -887,6 +887,7 @@
                 <button class="btn btn-warning" onclick="document.getElementById('excelFileInput').click()">📤 Импорт Excel</button>
                 <button class="btn btn-primary" onclick="printReport()">🖨️ Принтај</button>
                 <button class="btn btn-success" onclick="manualSync()">☁️ Синхронизирај</button>
+                <button class="btn btn-danger" onclick="cleanDuplicates()" style="margin-left: 10px;">🗑️ Избриши дупликати</button>
             </div>
             <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importFromCSV(event)">
             <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
@@ -1211,6 +1212,67 @@
             } catch (error) {
                 console.error('Manual sync error:', error);
                 showSyncStatus('error', '✗ Грешка при синхронизација. Податоците се зачувани локално.');
+            }
+        }
+
+        async function cleanDuplicates() {
+            if (!confirm('⚠️ ВНИМАНИЕ!\n\nОваа функција ќе ги најде и избрише сите дуплирани фактури.\n\nДупликат = иста фирма + ист број + иста сума + ист датум\n\nПрепорака: Направи backup пред да продолжиш!\n\nДали сакаш да продолжиш?')) {
+                return;
+            }
+
+            try {
+                showSyncStatus('loading', '⏳ Анализирам за дупликати...');
+                console.log(`📊 Вкупно фактури пред чистење: ${invoices.length}`);
+                
+                const seen = new Map();
+                const duplicates = [];
+                const unique = [];
+                
+                invoices.forEach((invoice) => {
+                    const key = `${invoice.companyName || ''}|${invoice.invoiceNumber || ''}|${invoice.amount || 0}|${invoice.entryDate || ''}`;
+                    
+                    if (seen.has(key)) {
+                        duplicates.push(invoice);
+                        console.log(`🔴 ДУПЛИКАТ: ${invoice.companyName} - ${invoice.invoiceNumber} (${invoice.amount} ден)`);
+                    } else {
+                        seen.set(key, true);
+                        unique.push(invoice);
+                    }
+                });
+                
+                console.log(`✅ Уникатни фактури: ${unique.length}`);
+                console.log(`🔴 Дупликати: ${duplicates.length}`);
+                
+                if (duplicates.length === 0) {
+                    showSyncStatus('success', '✅ Нема пронајдени дупликати!');
+                    alert('✅ ОДЛИЧНО!\n\nНема пронајдени дупликати во базата.');
+                    return;
+                }
+                
+                const confirmMsg = `Пронајдени:\n\n✅ Уникатни фактури: ${unique.length}\n🔴 Дупликати: ${duplicates.length}\n\nДали сакаш да ги избришеш дупликатите?\n\n(Ќе останат само ${unique.length} уникатни фактури)`;
+                
+                if (!confirm(confirmMsg)) {
+                    showSyncStatus('error', '✗ Откажано');
+                    return;
+                }
+                
+                showSyncStatus('loading', `⏳ Бришам ${duplicates.length} дупликати...`);
+                
+                invoices = unique;
+                saveInvoices();
+                applyFilters();
+                
+                showSyncStatus('success', `✅ Избришани ${duplicates.length} дупликати!`);
+                alert(`✅ ГОТОВО!\n\n🗑️ Избришани дупликати: ${duplicates.length}\n✅ Останати уникатни фактури: ${unique.length}\n\nПодатоците се веќе синхронизирани со Google Sheets.`);
+                
+                setTimeout(() => {
+                    loadFromCloud();
+                }, 2000);
+                
+            } catch (error) {
+                console.error('❌ Грешка при чистење:', error);
+                showSyncStatus('error', '✗ Грешка при бришење на дупликати');
+                alert('❌ Грешка при бришење на дупликати. Провери ја конзолата.');
             }
         }
 
