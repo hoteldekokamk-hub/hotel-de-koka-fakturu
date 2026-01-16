@@ -887,6 +887,7 @@
                 <button class="btn btn-warning" onclick="document.getElementById('excelFileInput').click()">📤 Импорт Excel</button>
                 <button class="btn btn-primary" onclick="printReport()">🖨️ Принтај</button>
                 <button class="btn btn-success" onclick="manualSync()">☁️ Синхронизирај</button>
+                <button class="btn btn-info" onclick="checkForDuplicates()">🔍 Провери дупликати</button>
             </div>
             <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importFromCSV(event)">
             <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
@@ -1119,12 +1120,18 @@
         async function loadFromCloud() {
             try {
                 showSyncStatus('loading', '⏳ Се вчитуваат податоци од Google Sheets...');
+                console.log('🌐 Вчитување од Google Sheets...');
                 
-                const response = await fetch(`${API_URL}?action=getAll&timestamp=${new Date().getTime()}`);
+                const response = await fetch(`${API_URL}?action=getAll&timestamp=${new Date().getTime()}`, {
+                    method: 'GET',
+                    cache: 'no-cache'
+                });
+                
                 const data = await response.json();
                 
                 if (data.status === 'success') {
                     invoices = data.invoices || [];
+                    console.log(`✅ Вчитани ${invoices.length} фактури од Google Sheets`);
                     
                     // Initialize payments array
                     invoices.forEach(inv => {
@@ -1135,22 +1142,24 @@
                     
                     // Save to localStorage as backup
                     localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
+                    console.log('💾 Backup зачуван во localStorage');
                     
                     // Update UI
                     applyFilters();
                     
-                    showSyncStatus('success', '✓ Податоците се вчитани од Google Sheets!');
+                    showSyncStatus('success', `✓ Вчитани ${invoices.length} фактури од Google Sheets!`);
                 } else {
                     throw new Error(data.message || 'Unknown error');
                 }
             } catch (error) {
-                console.error('Load error:', error);
+                console.error('❌ Load error:', error);
                 showSyncStatus('error', '✗ Не може да се поврзе со Google Sheets. Користам локални податоци.');
                 
                 // Fallback to localStorage
                 const localData = localStorage.getItem('hotelInvoices');
                 if (localData) {
                     invoices = JSON.parse(localData);
+                    console.log(`📦 Вчитани ${invoices.length} фактури од localStorage (backup)`);
                     invoices.forEach(inv => {
                         if (!inv.payments) {
                             inv.payments = [];
@@ -1164,6 +1173,8 @@
         async function syncToCloud() {
             try {
                 // Don't show loading for auto-sync (only for manual)
+                console.log(`🔄 Auto-sync: праќам ${invoices.length} фактури...`);
+                
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -1177,10 +1188,10 @@
                 });
                 
                 // Sync is successful (no-cors mode doesn't give us response)
-                console.log('Synced to Google Sheets');
+                console.log('✅ Auto-sync успешен');
                 
             } catch (error) {
-                console.error('Sync error:', error);
+                console.error('❌ Auto-sync грешка:', error);
                 // Continue working - data is in localStorage
             }
         }
@@ -1188,6 +1199,7 @@
         async function manualSync() {
             try {
                 showSyncStatus('loading', '⏳ Се синхронизира со Google Sheets...');
+                console.log(`📤 Праќам ${invoices.length} фактури на Google Sheets...`);
                 
                 const response = await fetch(API_URL, {
                     method: 'POST',
@@ -1202,16 +1214,70 @@
                 });
                 
                 showSyncStatus('success', '✓ Успешно синхронизирано со Google Sheets!');
+                console.log('✅ Податоци испратени на Google Sheets');
                 
-                // Reload to confirm
-                setTimeout(() => {
-                    loadFromCloud();
-                }, 1000);
+                // Reload to confirm after 2 seconds
+                setTimeout(async () => {
+                    console.log('🔄 Вчитување од Google Sheets за потврда...');
+                    await loadFromCloud();
+                }, 2000);
                 
             } catch (error) {
                 console.error('Manual sync error:', error);
                 showSyncStatus('error', '✗ Грешка при синхронизација. Податоците се зачувани локално.');
             }
+        }
+
+        function checkForDuplicates() {
+            console.log('🔍 Проверка за дупликати...');
+            
+            const duplicateGroups = {};
+            const seen = new Map();
+            
+            invoices.forEach((invoice, index) => {
+                const key = `${invoice.companyName}|${invoice.invoiceNumber}|${invoice.amount}|${invoice.entryDate}`;
+                
+                if (seen.has(key)) {
+                    // Дупликат пронајден
+                    if (!duplicateGroups[key]) {
+                        duplicateGroups[key] = {
+                            original: seen.get(key),
+                            duplicates: []
+                        };
+                    }
+                    duplicateGroups[key].duplicates.push(index);
+                } else {
+                    seen.set(key, index);
+                }
+            });
+            
+            const duplicateKeys = Object.keys(duplicateGroups);
+            
+            if (duplicateKeys.length === 0) {
+                alert('✅ ОДЛИЧНО!\n\nНема пронајдени дупликати.\n\nСите фактури се уникатни.');
+                console.log('✅ Нема дупликати');
+                return;
+            }
+            
+            // Прикажи детали за дупликатите
+            let message = `⚠️ ПРОНАЈДЕНИ ДУПЛИКАТИ!\n\nВкупно групи со дупликати: ${duplicateKeys.length}\n\n`;
+            
+            duplicateKeys.forEach(key => {
+                const group = duplicateGroups[key];
+                const original = invoices[group.original];
+                const count = group.duplicates.length + 1; // +1 за оригиналот
+                
+                message += `📋 ${original.companyName} - ${original.invoiceNumber}\n`;
+                message += `   Сума: ${formatCurrency(original.amount)} ден\n`;
+                message += `   Датум: ${original.entryDate}\n`;
+                message += `   Појавувања: ${count}x\n\n`;
+                
+                console.log(`🔴 ДУПЛИКАТ: ${original.companyName} - ${original.invoiceNumber} (${count}x)`);
+            });
+            
+            message += '\n⚠️ ВАЖНО: Дупликатите НЕ СЕ автоматски избришани.\n\nПроверкај ги рачно и избриши ги оние што не ти требаат.';
+            
+            alert(message);
         }
 
         function calculatePaidAmount(invoice) {
@@ -2080,6 +2146,31 @@
                         return;
                     }
                     
+                    // КРИТИЧНО: Провери за дупликати пред импорт
+                    if (invoices.length > 0) {
+                        let duplicateCount = 0;
+                        const existingKeys = new Set();
+                        
+                        invoices.forEach(inv => {
+                            const key = `${inv.companyName}|${inv.invoiceNumber}|${inv.amount}|${inv.entryDate}`;
+                            existingKeys.add(key);
+                        });
+                        
+                        importedInvoices.forEach(inv => {
+                            const key = `${inv.companyName}|${inv.invoiceNumber}|${inv.amount}|${inv.entryDate}`;
+                            if (existingKeys.has(key)) {
+                                duplicateCount++;
+                            }
+                        });
+                        
+                        if (duplicateCount > 0) {
+                            if (!confirm(`⚠️ ВНИМАНИЕ!\n\n${duplicateCount} од ${importedInvoices.length} фактури се ДУПЛИКАТИ на постоечки фактури!\n\nДали сакаш да продолжиш со импортот?\n\n(Дупликатите ќе бидат импортирани, можеш да ги провериш подоцна со "🔍 Провери дупликати")`)) {
+                                showSyncStatus('error', '✗ Импортот е откажан.');
+                                return;
+                            }
+                        }
+                    }
+                    
                     // Ask user what to do
                     const action = confirm(
                         `Пронајдени се ${importedInvoices.length} фактури.\n\n` +
@@ -2325,6 +2416,18 @@
                 notes: document.getElementById('notes').value,
                 payments: []
             };
+
+            // КРИТИЧНО: Провери за дупликат ПРЕД додавање
+            const duplicateKey = `${invoice.companyName}|${invoice.invoiceNumber}|${invoice.amount}|${invoice.entryDate}`;
+            const existingDuplicate = invoices.find(inv => {
+                const existingKey = `${inv.companyName}|${inv.invoiceNumber}|${inv.amount}|${inv.entryDate}`;
+                return existingKey === duplicateKey;
+            });
+
+            if (existingDuplicate) {
+                alert(`⚠️ ДУПЛИКАТ!\n\nОваа фактура веќе постои:\n\nФирма: ${invoice.companyName}\nБрој: ${invoice.invoiceNumber}\nСума: ${invoice.amount} ден\nДатум: ${invoice.entryDate}\n\nНе може да се додаде.`);
+                return; // НЕ додавај дупликат
+            }
 
             // Ново: иницијален статус (unpaid/paid/partial) при додавање
             const initialStatus = document.querySelector('input[name="initialStatus"]:checked')?.value || 'unpaid';
