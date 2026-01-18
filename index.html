@@ -1226,7 +1226,7 @@
 
         async function loadFromCloud() {
             try {
-                // Тивко вчитување без нотификација за да не досадува
+                // Тивко вчитување
                 console.log('🌐 Вчитување од Google Sheets...');
                 
                 const response = await fetch(`${API_URL}?action=getAll&timestamp=${new Date().getTime()}`, {
@@ -1254,15 +1254,13 @@
                     // Update UI
                     applyFilters();
                     
-                    console.log(`✅ Вчитани ${invoices.length} фактури од Google Sheets`);
-                    // Не прикажувај toast за рутинско вчитување
+                    console.log(`✅ Вчитани ${invoices.length} фактури`);
                 } else {
                     throw new Error(data.message || 'Unknown error');
                 }
             } catch (error) {
                 console.error('❌ Load error:', error);
                 console.log('⚠️ Користам локални податоци');
-                // Не прикажувај toast за рутинско вчитување
                 
                 // Fallback to localStorage
                 const localData = localStorage.getItem('hotelInvoices');
@@ -1281,7 +1279,7 @@
 
         async function manualSync() {
             try {
-                showToast('💾 Зачувување на Google Sheets...', 'info');
+                showToast('💾 Зачувување...', 'info');
                 console.log(`📤 Праќам ${invoices.length} фактури на Google Sheets...`);
                 
                 const response = await fetch(API_URL, {
@@ -1296,18 +1294,15 @@
                     })
                 });
                 
-                showToast('✅ Зачувано на Google Sheets!', 'success');
+                showToast('✅ Зачувано!', 'success');
                 console.log('✅ Податоци испратени на Google Sheets');
                 
                 // Reload to confirm after 2 seconds
-                setTimeout(async () => {
-                    console.log('🔄 Вчитување од Google Sheets за потврда...');
-                    await loadFromCloud();
-                }, 2000);
+                // Отстрането loadFromCloud - не треба да ги влече сите фактури повторно!
                 
             } catch (error) {
                 console.error('Manual sync error:', error);
-                showToast('⚠️ Податоците се зачувани локално', 'warning');
+                showToast('⚠️ Зачувано локално', 'warning');
             }
         }
 
@@ -2770,60 +2765,45 @@ document.addEventListener('keydown', function(event) {
         // Првична синхронизација при вчитување
         window.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 Апликацијата е вчитана');
-            showToast('🔄 Вчитување од Google Sheets...', 'info');
+            showToast('🔄 Вчитување...', 'info');
 
             // Вчитај од Google Sheets
             setTimeout(async () => {
                 await loadFromCloud();
-                showToast('✅ Податоците се вчитани!', 'success');
+                showToast('✅ Вчитано!', 'success');
             }, 2000);
         });
 
-        // Периодично тивко вчитување на секои 30 секунди (БЕЗ toast)
+        // Тивко периодично вчитување на секои 60 секунди (БЕЗ toast)
         setInterval(async () => {
-            console.log('🔄 Тивко вчитување од Google Sheets...');
+            console.log('🔄 Тивко вчитување...');
             await loadFromCloud();
-        }, 30000);
+        }, 60000);
 
-        // Автоматско зачувување при промени (со toast нотификации)
+        // Автоматско зачувување при додавање/измена (со toast)
         const originalSaveInvoices = saveInvoices;
-        saveInvoices = async function() {
+        window.saveInvoices = async function() {
             await originalSaveInvoices.call(this);
-            // После локално зачувување, зачувај и на Google Sheets
+            // Веднаш зачувај на Google Sheets (БРЗО, без loadFromCloud)
             setTimeout(async () => {
                 await manualSync();
-            }, 1000);
+            }, 500);
         };
 
-        const originalUpdateInvoice = updateInvoice;
-        updateInvoice = async function() {
-            originalUpdateInvoice.call(this);
-            setTimeout(async () => {
-                await manualSync();
-            }, 1000);
-        };
-
+        // Автоматско зачувување при бришење
         const originalDeleteInvoice = deleteInvoice;
-        deleteInvoice = async function(index) {
+        window.deleteInvoice = function(index) {
             if (confirm('Дали сте сигурни дека сакате да ја избришете оваа фактура?')) {
                 originalDeleteInvoice.call(this, index);
                 setTimeout(async () => {
                     await manualSync();
-                }, 1000);
+                }, 500);
             }
         };
 
-        const originalAddPayment = addPayment;
-        addPayment = async function() {
-            originalAddPayment.call(this);
-            setTimeout(async () => {
-                await manualSync();
-            }, 1000);
-        };
-
-        console.log('✅ Автоматска синхронизација е активна!');
-        console.log('📥 Вчитување: на секои 30 сек (тивко, без toast)');
-        console.log('📤 Зачувување: при промена (со toast нотификации)');
+        console.log('✅ БРЗА автоматска синхронизација активна!');
+        console.log('📥 Вчитување: на секои 60 секунди (тивко)');
+        console.log('📤 Зачувување: ИНСТАНТ при промена (без повторно вчитување!)');
 
     </script>
 </body>
