@@ -722,9 +722,58 @@
             margin-top: 0;
         }
 
+        /* Toast Notification - долу десно */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #155724;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-weight: 600;
+            z-index: 10000;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast-notification.show {
+            display: block;
+        }
+
+        .toast-notification.success {
+            background: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .toast-notification.error {
+            background: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .toast-notification.loading {
+            background: #0c5460;
+            border: 2px solid #bee5eb;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
 </style>
 </head>
 <body>
+    <!-- Toast Notification -->
+    <div id="toastNotification" class="toast-notification"></div>
+
     <div class="container">
         <h1>🏨 Хотел Де КОКА</h1>
         <p class="subtitle">Систем за следење на влезни фактури</p>
@@ -886,7 +935,7 @@
                 <button class="btn btn-warning" onclick="document.getElementById('csvFileInput').click()">📤 Импорт CSV</button>
                 <button class="btn btn-warning" onclick="document.getElementById('excelFileInput').click()">📤 Импорт Excel</button>
                 <button class="btn btn-primary" onclick="printReport()">🖨️ Принтај</button>
-                <button class="btn btn-success" onclick="manualSync()">☁️ Синхронизирај</button>
+                
                 <button class="btn btn-info" onclick="checkForDuplicates()">🔍 Провери дупликати</button>
             </div>
             <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importFromCSV(event)">
@@ -1073,11 +1122,29 @@
     </div>
 
     <script>
-        let invoices = [];
+        
+    // HTML Sanitization function to prevent XSS
+    function sanitizeHTML(str) {
+        const temp = document.createElement('div');
+        temp.textContent = str;
+        return temp.innerHTML;
+    }
+
+    function sanitizeForHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    let invoices = [];
         let filteredInvoices = [];
         let currentReportData = null;
         let editingPaymentIndex = null;
-        const API_URL = 'https://script.google.com/macros/s/AKfycbwHRZOu-tI-ko8E1mIUHYx5MIhDYixXc26tiKlC7aR0swm_wPLQlB0thjRTn6ZwZrAa/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbz50PHsLMn-rb-l53sRI6hnIoU6a8NF5TIlkTiz8oubMGsqQt1DPOiG--uN65OivGiCIw/exec';
 
         // Load from cloud on startup - NEVER sync empty data on load!
         loadFromCloud();
@@ -1097,11 +1164,36 @@
             }).format(amount);
         }
 
-        function saveInvoices() {
-            // Always save to localStorage as backup
+        async function saveInvoices() {
+            // КРИТИЧНО: Прво зачувај локално
             localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
-            // Sync to cloud after saving
-            syncToCloud();
+            console.log(`💾 Зачувано локално: ${invoices.length} фактури`);
+            
+            // КРИТИЧНО: Веднаш синхронизирај со Google Sheets
+            try {
+                console.log(`☁️ Синхронизација со Google Sheets...`);
+                
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'save',
+                        invoices: invoices
+                    })
+                });
+                
+                // Провери дали е успешно
+                if (response.ok) {
+                    console.log(`✅ Синхронизирано: ${invoices.length} фактури`);
+                } else {
+                    console.warn(`⚠️ Sync одговори со status: ${response.status}`);
+                }
+                
+            } catch (error) {
+                console.error('❌ Sync грешка:', error);
+            }
         }
 
         function showSyncStatus(type, message) {
@@ -1110,6 +1202,9 @@
             statusDiv.textContent = message;
             statusDiv.classList.remove('hidden');
             
+            // Прикажи toast notification долу десно
+            showToast(type, message);
+            
             if (type === 'success' || type === 'error') {
                 setTimeout(() => {
                     statusDiv.classList.add('hidden');
@@ -1117,9 +1212,21 @@
             }
         }
 
+        function showToast(type, message) {
+            const toast = document.getElementById('toastNotification');
+            toast.className = `toast-notification ${type} show`;
+            toast.textContent = message;
+            
+            // Автоматски сокриј по 4 секунди
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+
+
         async function loadFromCloud() {
             try {
-                showSyncStatus('loading', '⏳ Се вчитуваат податоци од Google Sheets...');
+                // Тивко вчитување без нотификација за да не досадува
                 console.log('🌐 Вчитување од Google Sheets...');
                 
                 const response = await fetch(`${API_URL}?action=getAll&timestamp=${new Date().getTime()}`, {
@@ -1147,13 +1254,15 @@
                     // Update UI
                     applyFilters();
                     
-                    showSyncStatus('success', `✓ Вчитани ${invoices.length} фактури од Google Sheets!`);
+                    console.log(`✅ Вчитани ${invoices.length} фактури од Google Sheets`);
+                    // Не прикажувај toast за рутинско вчитување
                 } else {
                     throw new Error(data.message || 'Unknown error');
                 }
             } catch (error) {
                 console.error('❌ Load error:', error);
-                showSyncStatus('error', '✗ Не може да се поврзе со Google Sheets. Користам локални податоци.');
+                console.log('⚠️ Користам локални податоци');
+                // Не прикажувај toast за рутинско вчитување
                 
                 // Fallback to localStorage
                 const localData = localStorage.getItem('hotelInvoices');
@@ -1170,35 +1279,9 @@
             }
         }
 
-        async function syncToCloud() {
-            try {
-                // Don't show loading for auto-sync (only for manual)
-                console.log(`🔄 Auto-sync: праќам ${invoices.length} фактури...`);
-                
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        action: 'save',
-                        invoices: invoices
-                    })
-                });
-                
-                // Sync is successful (no-cors mode doesn't give us response)
-                console.log('✅ Auto-sync успешен');
-                
-            } catch (error) {
-                console.error('❌ Auto-sync грешка:', error);
-                // Continue working - data is in localStorage
-            }
-        }
-
         async function manualSync() {
             try {
-                showSyncStatus('loading', '⏳ Се синхронизира со Google Sheets...');
+                showToast('💾 Зачувување на Google Sheets...', 'info');
                 console.log(`📤 Праќам ${invoices.length} фактури на Google Sheets...`);
                 
                 const response = await fetch(API_URL, {
@@ -1213,7 +1296,7 @@
                     })
                 });
                 
-                showSyncStatus('success', '✓ Успешно синхронизирано со Google Sheets!');
+                showToast('✅ Зачувано на Google Sheets!', 'success');
                 console.log('✅ Податоци испратени на Google Sheets');
                 
                 // Reload to confirm after 2 seconds
@@ -1224,7 +1307,7 @@
                 
             } catch (error) {
                 console.error('Manual sync error:', error);
-                showSyncStatus('error', '✗ Грешка при синхронизација. Податоците се зачувани локално.');
+                showToast('⚠️ Податоците се зачувани локално', 'warning');
             }
         }
 
@@ -1284,7 +1367,7 @@
             if (!invoice.payments || invoice.payments.length === 0) {
                 return 0;
             }
-            return invoice.payments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
+            return invoice.payments.reduce((sum, payment) => sum + (parseFloat(payment.amount) || 0), 0);
         }
 
         function calculateRemainingAmount(invoice) {
@@ -1377,7 +1460,7 @@
                     };
                 }
                 grouped[key].count++;
-                grouped[key].totalAmount += parseFloat(inv.amount);
+                grouped[key].totalAmount += (parseFloat(inv.amount) || 0);
             });
 
             let html = '';
@@ -1753,7 +1836,7 @@
             editingPaymentIndex = null;
         }
 
-        function savePaymentEdit(paymentIndex) {
+        async function savePaymentEdit(paymentIndex) {
             const invoiceIndex = parseInt(document.getElementById('paymentInvoiceIndex').value);
             const invoice = invoices[invoiceIndex];
             
@@ -1782,30 +1865,30 @@
                 note: newNote
             };
 
-            saveInvoices();
+            await saveInvoices();
             openPaymentModal(invoiceIndex);
             applyFilters();
         }
 
-        function deletePayment(paymentIndex) {
+        async function deletePayment(paymentIndex) {
             if (!confirm('Дали сте сигурни дека сакате да го избришете ова плаќање?')) {
                 return;
             }
 
             const invoiceIndex = parseInt(document.getElementById('paymentInvoiceIndex').value);
             invoices[invoiceIndex].payments.splice(paymentIndex, 1);
-            saveInvoices();
+            await saveInvoices();
             
             openPaymentModal(invoiceIndex);
             applyFilters();
         }
 
-        document.getElementById('addPaymentForm').addEventListener('submit', function(e) {
+        document.getElementById('addPaymentForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const invoiceIndex = parseInt(document.getElementById('paymentInvoiceIndex').value);
             const invoice = invoices[invoiceIndex];
-            const paymentAmount = parseFloat(document.getElementById('paymentAmount').value);
+            const paymentAmount = (parseFloat(document.getElementById('paymentAmount').value) || 0);
             const remainingAmount = calculateRemainingAmount(invoice);
 
             if (paymentAmount > remainingAmount) {
@@ -1829,7 +1912,7 @@
             }
 
             invoice.payments.push(payment);
-            saveInvoices();
+            await saveInvoices();
             
             openPaymentModal(invoiceIndex);
             applyFilters();
@@ -2032,7 +2115,7 @@
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const text = e.target.result;
                     const lines = text.split('\n');
@@ -2194,7 +2277,7 @@
                     }
                     
                     // Save and update
-                    saveInvoices();
+                    await saveInvoices();
                     applyFilters();
                     
                 } catch (error) {
@@ -2214,7 +2297,7 @@
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
@@ -2313,7 +2396,7 @@
                         }
                     }
                     
-                    saveInvoices();
+                    await saveInvoices();
                     applyFilters();
                     
                 } catch (error) {
@@ -2395,22 +2478,24 @@
             document.getElementById('editModal').style.display = 'none';
         }
 
-        function deleteInvoice(index) {
+        async function deleteInvoice(index) {
             if (confirm('Дали сте сигурни дека сакате да ја избришете оваа фактура?')) {
                 invoices.splice(index, 1);
-                saveInvoices();
+                showSyncStatus('loading', '⏳ Бришам...');
+                await saveInvoices();
+                showSyncStatus('success', '✓ Избришано!');
                 applyFilters();
             }
         }
 
-        document.getElementById('invoiceForm').addEventListener('submit', function(e) {
+        document.getElementById('invoiceForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const invoice = {
                 companyName: document.getElementById('companyName').value,
                 invoiceNumber: document.getElementById('invoiceNumber').value,
                 bankAccount: document.getElementById('bankAccount').value,
-                amount: parseFloat(document.getElementById('amount').value),
+                amount: (parseFloat(document.getElementById('amount').value) || 0),
                 entryDate: document.getElementById('entryDate').value,
                 dueDate: document.getElementById('dueDate').value,
                 notes: document.getElementById('notes').value,
@@ -2455,7 +2540,9 @@
             }
 
             invoices.push(invoice);
-            saveInvoices();
+            showSyncStatus('loading', '⏳ Зачувување...');
+            await saveInvoices();
+            showSyncStatus('success', '✓ Фактурата е зачувана!');
             applyFilters();
             closeAddInvoiceModal();
 
@@ -2468,7 +2555,7 @@
             document.getElementById('isPaidCash').checked = false;
         });
 
-        document.getElementById('editForm').addEventListener('submit', function(e) {
+        document.getElementById('editForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const index = parseInt(document.getElementById('editIndex').value);
@@ -2477,12 +2564,14 @@
             invoice.companyName = document.getElementById('editCompanyName').value;
             invoice.invoiceNumber = document.getElementById('editInvoiceNumber').value;
             invoice.bankAccount = document.getElementById('editBankAccount').value;
-            invoice.amount = parseFloat(document.getElementById('editAmount').value);
+            invoice.amount = (parseFloat(document.getElementById('editAmount').value) || 0);
             invoice.entryDate = document.getElementById('editEntryDate').value;
             invoice.dueDate = document.getElementById('editDueDate').value;
             invoice.notes = document.getElementById('editNotes').value;
 
-            saveInvoices();
+            showSyncStatus('loading', '⏳ Зачувување...');
+            await saveInvoices();
+            showSyncStatus('success', '✓ Променето!');
             closeEditModal();
             applyFilters();
         });
@@ -2673,6 +2762,69 @@ document.addEventListener('keydown', function(event) {
     window.addEventListener('resize', __hk_setupMobileButton);
 })();
 
-</script>
+
+        // ============================================
+        // АВТОМАТСКА СИНХРОНИЗАЦИЈА
+        // ============================================
+
+        // Првична синхронизација при вчитување
+        window.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Апликацијата е вчитана');
+            showToast('🔄 Вчитување од Google Sheets...', 'info');
+
+            // Вчитај од Google Sheets
+            setTimeout(async () => {
+                await loadFromCloud();
+                showToast('✅ Податоците се вчитани!', 'success');
+            }, 2000);
+        });
+
+        // Периодично тивко вчитување на секои 30 секунди (БЕЗ toast)
+        setInterval(async () => {
+            console.log('🔄 Тивко вчитување од Google Sheets...');
+            await loadFromCloud();
+        }, 30000);
+
+        // Автоматско зачувување при промени (со toast нотификации)
+        const originalSaveInvoices = saveInvoices;
+        saveInvoices = async function() {
+            await originalSaveInvoices.call(this);
+            // После локално зачувување, зачувај и на Google Sheets
+            setTimeout(async () => {
+                await manualSync();
+            }, 1000);
+        };
+
+        const originalUpdateInvoice = updateInvoice;
+        updateInvoice = async function() {
+            originalUpdateInvoice.call(this);
+            setTimeout(async () => {
+                await manualSync();
+            }, 1000);
+        };
+
+        const originalDeleteInvoice = deleteInvoice;
+        deleteInvoice = async function(index) {
+            if (confirm('Дали сте сигурни дека сакате да ја избришете оваа фактура?')) {
+                originalDeleteInvoice.call(this, index);
+                setTimeout(async () => {
+                    await manualSync();
+                }, 1000);
+            }
+        };
+
+        const originalAddPayment = addPayment;
+        addPayment = async function() {
+            originalAddPayment.call(this);
+            setTimeout(async () => {
+                await manualSync();
+            }, 1000);
+        };
+
+        console.log('✅ Автоматска синхронизација е активна!');
+        console.log('📥 Вчитување: на секои 30 сек (тивко, без toast)');
+        console.log('📤 Зачувување: при промена (со toast нотификации)');
+
+    </script>
 </body>
 </html>
