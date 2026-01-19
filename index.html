@@ -41,35 +41,7 @@
             margin-bottom: 30px;
             font-size: 1.1em;
         }
-        .sync-status {
-            text-align: center;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-
-        .sync-status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .sync-status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .sync-status.loading {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-
-        .sync-status.hidden {
-            display: none;
-        }
+        /* Sync indicator styles moved to JavaScript */
 
 
         .form-section {
@@ -817,7 +789,7 @@
 </div>
 
 
-<div id="syncStatus" class="sync-status hidden"></div>
+<!-- Sync indicator will be created dynamically by JavaScript -->
 
         <div class="summary">
             <div class="summary-card" id="cardTotal" onclick="showAllInvoices()">
@@ -1122,14 +1094,14 @@
         console.log(`💾 Зачувано локално: ${invoices.length} фактури`);
 
         // Show syncing status
-        showSyncStatus('loading', '🔄 Синхронизација со Google Sheets...');
+        showSyncIndicator('syncing' '🔄 Синхронизација со Google Sheets...');
 
         // Try to sync with Google Sheets
         try {
             const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'text/plain',
                 },
                 body: JSON.stringify({
                     action: 'save',
@@ -1144,7 +1116,7 @@
             const result = await response.json();
             if (result && result.status === 'success') {
                 console.log(`✅ Синхронизирано: ${invoices.length} фактури`);
-                showSyncStatus('success', `✅ Синхронизирано! (${invoices.length} фактури)`);
+                showSyncIndicator('success' `✅ Синхронизирано! (${invoices.length} фактури)`);
                 return true;
             } else {
                 throw new Error(result?.message || 'Unknown error');
@@ -1154,11 +1126,11 @@
 
             // Show appropriate message based on error
             if (!navigator.onLine) {
-                showSyncStatus('warning', '⚠️ Нема интернет! Зачувано само локално.');
+                showSyncIndicator('error' '⚠️ Нема интернет! Зачувано само локално.');
             } else if (error.message && error.message.includes('Failed to fetch')) {
-                showSyncStatus('warning', '⚠️ CORS ограничување. Податоците се локално зачувани.');
+                showSyncIndicator('error' '⚠️ CORS ограничување. Податоците се локално зачувани.');
             } else {
-                showSyncStatus('warning', `⚠️ Синхронизација не успеа. Локално зачувано.`);
+                showSyncIndicator('error' `⚠️ Синхронизација не успеа. Локално зачувано.`);
             }
             return false;
         }
@@ -1179,7 +1151,7 @@
 
         async function loadFromCloud() {
             try {
-                showSyncStatus('loading', '⏳ Се вчитуваат податоци од Google Sheets...');
+                showSyncIndicator('syncing' '⏳ Се вчитуваат податоци од Google Sheets...');
                 console.log('🌐 Вчитување од Google Sheets...');
                 
                 const response = await fetch(`${API_URL}?action=getAll&timestamp=${new Date().getTime()}`, {
@@ -1207,13 +1179,13 @@
                     // Update UI
                     applyFilters();
                     
-                    showSyncStatus('success', `✓ Вчитани ${invoices.length} фактури од Google Sheets!`);
+                    showSyncIndicator('success' `✓ Вчитани ${invoices.length} фактури од Google Sheets!`);
                 } else {
                     throw new Error(data.message || 'Unknown error');
                 }
             } catch (error) {
                 console.error('❌ Load error:', error);
-                showSyncStatus('error', '✗ Не може да се поврзе со Google Sheets. Користам локални податоци.');
+                showSyncIndicator('error' '✗ Не може да се поврзе со Google Sheets. Користам локални податоци.');
                 
                 // Fallback to localStorage
                 const localData = localStorage.getItem('hotelInvoices');
@@ -1232,14 +1204,13 @@
 
         async function manualSync() {
             try {
-                showSyncStatus('loading', '⏳ Се синхронизира со Google Sheets...');
+                showSyncIndicator('syncing' '⏳ Се синхронизира со Google Sheets...');
                 console.log(`📤 Праќам ${invoices.length} фактури на Google Sheets...`);
                 
                 const response = await fetch(API_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'text/plain',
                     },
                     body: JSON.stringify({
                         action: 'save',
@@ -1247,7 +1218,7 @@
                     })
                 });
                 
-                showSyncStatus('success', '✓ Успешно синхронизирано со Google Sheets!');
+                showSyncIndicator('success' '✓ Успешно синхронизирано со Google Sheets!');
                 console.log('✅ Податоци испратени на Google Sheets');
                 
                 // Reload to confirm after 2 seconds
@@ -1258,7 +1229,7 @@
                 
             } catch (error) {
                 console.error('Manual sync error:', error);
-                showSyncStatus('error', '✗ Грешка при синхронизација. Податоците се зачувани локално.');
+                showSyncIndicator('error' '✗ Грешка при синхронизација. Податоците се зачувани локално.');
             }
         }
 
@@ -1320,7 +1291,7 @@
             return;
         }
 
-        showSyncStatus('loading', '🔍 Пребарување дупликати...');
+        showSyncIndicator('syncing' '🔍 Пребарување дупликати...');
 
         const duplicateGroups = {};
         const seen = new Map();
@@ -1339,7 +1310,7 @@
 
         const keys = Object.keys(duplicateGroups);
         if (keys.length === 0) {
-            showSyncStatus('success', '✅ Нема дупликати!');
+            showSyncIndicator('success' '✅ Нема дупликати!');
             return;
         }
 
@@ -1349,11 +1320,11 @@
         const remaining = invoices.length - total;
 
         if (!confirm(`⚠️ БРИШЕЊЕ НА ДУПЛИКАТИ\n\nВкупно фактури: ${invoices.length}\nУникатни фактури: ${remaining}\nДупликати за бришење: ${total}\n\nДали сте сигурни?`)) {
-            showSyncStatus('warning', '❌ Откажано');
+            showSyncIndicator('error' '❌ Откажано');
             return;
         }
 
-        showSyncStatus('loading', '🧹 Бришење на дупликати...');
+        showSyncIndicator('syncing' '🧹 Бришење на дупликати...');
 
         const toDelete = [];
         keys.forEach(k => toDelete.push(...duplicateGroups[k].duplicates));
@@ -1363,7 +1334,7 @@
         localStorage.setItem('hotelInvoices', JSON.stringify(invoices));
         applyFilters();
 
-        showSyncStatus('success', `✅ Избришани ${total} дупликати!`);
+        showSyncIndicator('success' `✅ Избришани ${total} дупликати!`);
 
         // Auto-sync after 2 seconds
         setTimeout(async () => {
@@ -2262,7 +2233,7 @@
                         
                         if (duplicateCount > 0) {
                             if (!confirm(`⚠️ ВНИМАНИЕ!\n\n${duplicateCount} од ${importedInvoices.length} фактури се ДУПЛИКАТИ на постоечки фактури!\n\nДали сакаш да продолжиш со импортот?\n\n(Дупликатите ќе бидат импортирани, можеш да ги провериш подоцна со "🔍 Провери дупликати")`)) {
-                                showSyncStatus('error', '✗ Импортот е откажан.');
+                                showSyncIndicator('error' '✗ Импортот е откажан.');
                                 return;
                             }
                         }
@@ -2278,14 +2249,14 @@
                     if (action) {
                         // Add to existing
                         invoices = [...invoices, ...importedInvoices];
-                        showSyncStatus('success', `✓ Додадени се ${importedInvoices.length} нови фактури од CSV!`);
+                        showSyncIndicator('success' `✓ Додадени се ${importedInvoices.length} нови фактури од CSV!`);
                     } else {
                         // Replace all
                         if (confirm('Дали сте СИГУРНИ дека сакате да ги избришете СИТЕ постоечки фактури и да ги замените со импортираните од CSV?')) {
                             invoices = importedInvoices;
-                            showSyncStatus('success', `✓ Фактурите се заменети! Вчитани ${importedInvoices.length} фактури од CSV.`);
+                            showSyncIndicator('success' `✓ Фактурите се заменети! Вчитани ${importedInvoices.length} фактури од CSV.`);
                         } else {
-                            showSyncStatus('error', '✗ Импортот е откажан.');
+                            showSyncIndicator('error' '✗ Импортот е откажан.');
                             return;
                         }
                     }
@@ -2399,13 +2370,13 @@
                     
                     if (action) {
                         invoices = invoices.concat(allImportedInvoices);
-                        showSyncStatus('success', '✓ Додадени ' + allImportedInvoices.length + ' фактури!');
+                        showSyncIndicator('success' '✓ Додадени ' + allImportedInvoices.length + ' фактури!');
                     } else {
                         if (confirm('Сигурни сте дека сакате да избришете СЕ?')) {
                             invoices = allImportedInvoices;
-                            showSyncStatus('success', '✓ Заменети ' + allImportedInvoices.length + ' фактури!');
+                            showSyncIndicator('success' '✓ Заменети ' + allImportedInvoices.length + ' фактури!');
                         } else {
-                            showSyncStatus('error', '✗ Откажано');
+                            showSyncIndicator('error' '✗ Откажано');
                             return;
                         }
                     }
@@ -2495,9 +2466,9 @@
         async function deleteInvoice(index) {
             if (confirm('Дали сте сигурни дека сакате да ја избришете оваа фактура?')) {
                 invoices.splice(index, 1);
-                showSyncStatus('loading', '⏳ Бришам...');
+                showSyncIndicator('syncing' '⏳ Бришам...');
                 await saveInvoices();
-                showSyncStatus('success', '✓ Избришано!');
+                showSyncIndicator('success' '✓ Избришано!');
                 applyFilters();
             }
         }
@@ -2554,9 +2525,9 @@
             }
 
             invoices.push(invoice);
-            showSyncStatus('loading', '⏳ Зачувување...');
+            showSyncIndicator('syncing' '⏳ Зачувување...');
             await saveInvoices();
-            showSyncStatus('success', '✓ Фактурата е зачувана!');
+            showSyncIndicator('success' '✓ Фактурата е зачувана!');
             applyFilters();
             closeAddInvoiceModal();
 
@@ -2583,9 +2554,9 @@
             invoice.dueDate = document.getElementById('editDueDate').value;
             invoice.notes = document.getElementById('editNotes').value;
 
-            showSyncStatus('loading', '⏳ Зачувување...');
+            showSyncIndicator('syncing' '⏳ Зачувување...');
             await saveInvoices();
-            showSyncStatus('success', '✓ Променето!');
+            showSyncIndicator('success' '✓ Променето!');
             closeEditModal();
             applyFilters();
         });
